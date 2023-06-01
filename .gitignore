@@ -1,0 +1,6 @@
+.env
+node_modules
+draft.js
+transaction.js
+makeTransaction.js
+query_subgraph.js
