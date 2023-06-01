@@ -1,4 +1,7 @@
 {
+  "engines": {
+    "node": "14.x"
+  },
   "dependencies": {
     "apollo-boost": "^0.4.9",
     "axios": "^1.4.0",
