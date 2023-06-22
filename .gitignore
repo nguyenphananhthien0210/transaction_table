@@ -1,6 +1,7 @@
 .env
 node_modules
 draft.js
-transaction.js
-makeTransaction.js
 query_subgraph.js
+top.js
+top2.js
+topnft.js
