@@ -113,13 +113,13 @@ async function getMetadata(nftAddress, tokenId) {
         const metadata = response.data;
 
         if (!metadata) {
-            return { name: `${nftAddress}:${tokenId}`, image: null };
+            return { name: `${nftAddress}:${tokenId}` };
         } else {
             return metadata;
         }
     } catch (error) {
         console.error(error);
-        return { name: `${nftAddress}:${tokenId}`, image: null };
+        return { name: `${nftAddress}:${tokenId}` };
     }
 }
 

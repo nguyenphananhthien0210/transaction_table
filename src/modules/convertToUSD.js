@@ -1,56 +1,242 @@
-const express = require('express');
-const mongoose = require('mongoose');
+
+// const { MongoClient } = require('mongodb');
+// const axios = require('axios');
+// require('dotenv').config();
+
+// const uri = process.env.CONNECTED_MONGODB_URI;
+// const databaseName = process.env.RATE_PRICE;
+// const collectionName = process.env.RATE_PRICE;
+// const client = new MongoClient(uri);
+
+// async function getRatePriceFromDatabase(tokenSymbol) {
+
+//     try {
+//         await client.connect();
+//         const db = client.db(databaseName);
+//         const collection = db.collection(collectionName);
+
+//         const tokenInfo = await collection.findOne({ tokenSymbol: tokenSymbol });
+//         if (!tokenInfo) {
+//             console.log('Không tìm thấy tỷ giá trong cơ sở dữ liệu. Lấy từ API và cập nhật.');
+
+//             // Lấy tỷ giá mới từ API
+//             const updatedTokenInfo = await getTokenPriceFromAPI(tokenSymbol);
+
+//             // Cập nhật tỷ giá mới vào cơ sở dữ liệu
+//             await updateTokenPricesInDatabase(updatedTokenInfo);
+
+//             return updatedTokenInfo.ratePrice;
+//         }
+
+//         const currentTime = Math.floor(Date.now() / 1000);
+//         const lastUpdatedTime = tokenInfo.lastUpdatedTime || 0;
+//         const timeDiff = currentTime - lastUpdatedTime;
+//         const fiveMinutesInSeconds = 5 * 60 * 60;
+
+//         if (timeDiff > fiveMinutesInSeconds) {
+//             console.log('Tỷ giá đã quá hạn, lấy từ API và cập nhật cơ sở dữ liệu.');
+
+//             // Lấy tỷ giá mới từ API
+//             const updatedTokenInfo = await getTokenPriceFromAPI(tokenSymbol);
+
+//             // Cập nhật tỷ giá mới vào cơ sở dữ liệu
+//             await updateTokenPricesInDatabase(updatedTokenInfo);
+
+//             return updatedTokenInfo.ratePrice;
+//         } else {
+//             console.log('Sử dụng tỷ giá từ cơ sở dữ liệu.');
+
+//             return tokenInfo.ratePrice;
+//         }
+//     } catch (error) {
+//         console.error('Lỗi khi lấy tỷ giá từ cơ sở dữ liệu:', error);
+//         return null;
+//     } finally {
+//         await client.close();
+//     }
+// }
+
+// async function getTokenIdFromCoinGecko(tokenSymbol) {
+//     try {
+//         const response = await axios.get('https://api.coingecko.com/api/v3/coins/list');
+//         const tokenList = response.data;
+
+//         const matchedToken = tokenList.find(token => token.symbol.toLowerCase() === tokenSymbol.toLowerCase());
+
+//         if (!matchedToken) {
+//             console.log(`Không tìm thấy thông tin cho tokenSymbol ${tokenSymbol}`);
+//             return null;
+//         }
+
+//         const tokenId = matchedToken.id;
+
+//         console.log(`ID của tokenSymbol ${tokenSymbol} là ${tokenId}`);
+
+//         return tokenId;
+//     } catch (error) {
+//         console.error(`Lỗi khi lấy ID cho tokenSymbol ${tokenSymbol} từ CoinGecko API:`, error);
+//         return null;
+//     }
+// }
+
+// async function getTokenPriceFromAPI(tokenSymbol) {
+//     try {
+//         const tokenId = await getTokenIdFromCoinGecko(tokenSymbol);
+//         if (!tokenId) {
+//             // Token không tồn tại trong danh sách
+//             return null;
+//         }
+
+//         const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${tokenId}&vs_currencies=usd`);
+//         const data = response.data;
+
+//         const ratePrice = data[tokenId].usd;
+
+//         const currentTime = Math.floor(Date.now() / 1000);
+
+//         const tokenInfo = {
+//             id: tokenId,
+//             tokenSymbol: tokenSymbol.toLowerCase(),
+//             ratePrice: ratePrice,
+//             lastUpdatedTime: currentTime
+//         };
+
+//         console.log('Tỷ giá mới từ API:', tokenInfo);
+
+//         return tokenInfo;
+//     } catch (error) {
+//         console.error('Lỗi khi lấy tỷ giá từ API:', error);
+//         return null;
+//     }
+// }
+
+// async function updateTokenPricesInDatabase(tokenInfo) {
+
+//     try {
+//         await client.connect();
+//         const db = client.db(databaseName);
+//         const collection = db.collection(collectionName);
+
+//         await collection.updateOne({ tokenSymbol: tokenInfo.tokenSymbol }, { $set: tokenInfo }, { upsert: true });
+
+//         console.log('Cập nhật tỷ giá vào cơ sở dữ liệu thành công.');
+//     } catch (error) {
+//         console.error('Lỗi khi cập nhật tỷ giá vào cơ sở dữ liệu:', error);
+//     } finally {
+//         await client.close();
+//     }
+// }
+
+// module.exports = {
+//     getRatePriceFromDatabase,
+// };
+
+
+
+const { MongoClient } = require('mongodb');
 const axios = require('axios');
+require('dotenv').config();
 
-const app = express();
-const port = process.env.PORT || 4000;
-const mongoURI = process.env.MONGODB_URI;
+const uri = process.env.CONNECTED_MONGODB_URI;
+const databaseName = process.env.RATE_PRICE;
+const collectionName = process.env.RATE_PRICE_2;
+const client = new MongoClient(uri);
 
-const exchangeRateSchema = new mongoose.Schema({
-    symbol: { type: String, unique: true },
-    usd_price: Number,
-    last_updated: { type: Date, default: Date.now }
-});
-
-const ExchangeRate = mongoose.model('ExchangeRate', exchangeRateSchema);
-
-mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => {
-        console.log('Connected to MongoDB');
-
-        app.listen(port, () => {
-            console.log(`Server is running on port ${port}`);
-
-            updateExchangeRates();
-            setInterval(updateExchangeRates, 3600000);
-        });
-    })
-    .catch((error) => {
-        console.error('Failed to connect to MongoDB:', error);
-    });
-
-async function updateExchangeRates() {
+async function getRatePriceFromDatabase(tokenSymbol) {
     try {
-        const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=ethereum,bitcoin&vs_currencies=usd');
+        await client.connect();
+        const db = client.db(databaseName);
+        const collection = db.collection(collectionName);
+
+        const tokenInfo = await collection.findOne({ tokenSymbol: tokenSymbol });
+
+        if (!tokenInfo) {
+            console.log(`Không tìm thấy tỷ giá cho ${tokenSymbol} trong cơ sở dữ liệu. Lấy từ API và cập nhật.`);
+
+            // Lấy tỷ giá từ API cho các token symbol
+            const updatedTokenInfoList = await getTokenPricesFromAPI();
+
+            // Cập nhật tỷ giá vào cơ sở dữ liệu
+            await updateTokenPricesInDatabase(updatedTokenInfoList);
+
+            const updatedTokenInfo = updatedTokenInfoList.find(info => info.tokenSymbol === tokenSymbol);
+
+            if (!updatedTokenInfo) {
+                console.log(`Không tìm thấy tỷ giá cho ${tokenSymbol} sau khi cập nhật.`);
+                return null;
+            }
+
+            console.log(`Tỷ giá cho ${tokenSymbol}: ${updatedTokenInfo.ratePrice}`);
+            return updatedTokenInfo.ratePrice;
+        }
+
+        console.log(`Tỷ giá cho ${tokenSymbol}: ${tokenInfo.ratePrice}`);
+        return tokenInfo.ratePrice;
+    } catch (error) {
+        console.error('Lỗi khi lấy tỷ giá từ cơ sở dữ liệu:', error);
+        return null;
+    } finally {
+        await client.close();
+    }
+}
+
+async function getTokenPricesFromAPI() {
+    try {
+        const response = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=weth,ethereum,tether,usd-coin&vs_currencies=usd');
         const data = response.data;
 
-        await Promise.all([
-            updateExchangeRate('ETH', data.ethereum.usd),
-            updateExchangeRate('BTC', data.bitcoin.usd)
-        ]);
+        const updatedTokenInfoList = Object.entries(data).map(([id, tokenData]) => {
+            const tokenSymbol = getTokenSymbolFromId(id);
+            const ratePrice = tokenData.usd;
+            const currentTime = Math.floor(Date.now() / 1000);
 
-        console.log('Exchange rates updated');
+            return {
+                id: id,
+                tokenSymbol: tokenSymbol,
+                ratePrice: ratePrice,
+                lastUpdatedTime: currentTime,
+            };
+        });
+
+        console.log('Tỷ giá mới từ API:', updatedTokenInfoList);
+
+        return updatedTokenInfoList;
     } catch (error) {
-        console.error('Failed to update exchange rates:', error);
+        console.error('Lỗi khi lấy tỷ giá từ API:', error);
+        return [];
     }
 }
 
-async function updateExchangeRate(symbol, usdPrice) {
+async function updateTokenPricesInDatabase(tokenInfoList) {
     try {
-        const filter = { symbol };
-        const update = { usd_price: usdPrice, last_updated: new Date() };
-        await ExchangeRate.findOneAndUpdate(filter, update, { upsert: true });
+        await client.connect();
+        const db = client.db(databaseName);
+        const collection = db.collection(collectionName);
+
+        for (const tokenInfo of tokenInfoList) {
+            await collection.updateOne({ id: tokenInfo.id }, { $set: tokenInfo }, { upsert: true });
+        }
+
+        console.log('Cập nhật tỷ giá vào cơ sở dữ liệu thành công.');
     } catch (error) {
-        console.error(`Failed to update exchange rate for ${symbol}:`, error);
+        console.error('Lỗi khi cập nhật tỷ giá vào cơ sở dữ liệu:', error);
+    } finally {
+        await client.close();
     }
 }
+
+function getTokenSymbolFromId(id) {
+    const symbolMap = {
+        'weth': 'weth',
+        'ethereum': 'eth',
+        'tether': 'usdt',
+        'usd-coin': 'usdc',
+    };
+
+    return symbolMap[id] || '';
+}
+
+//export { getRatePriceFromDatabase };
+module.exports = {
+    getRatePriceFromDatabase,
+};

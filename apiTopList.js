@@ -14,6 +14,8 @@ const port = process.env.PORT || 4000;
 const uri = process.env.CONNECTED_MONGODB_URI;
 
 const getSymbolModule = require('./src/modules/getSymbol.js');
+const { getRatePriceFromDatabase } = require('./src/modules/convertToUSD.js');
+
 
 app.get('/top-nft', async (req, res) => {
     try {
@@ -43,7 +45,10 @@ app.get('/top-nft', async (req, res) => {
 });
 
 async function findTransactions(collection) {
-    const query = { action: 'Buy' };
+
+    const twentyFourHoursAgo = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
+
+    const query = { blockTime: { $gte: parseInt(twentyFourHoursAgo) } };
     const transactions = await collection.find(query).sort({ blockTime: -1 }).toArray();
     return transactions;
 }
@@ -82,6 +87,10 @@ async function fetchNftMetadata(result) {
         const tokenAddress = await getTokenAddress(dml)
         const tokenSymbol = await getSymbolModule.getTokenSymbol(tokenAddress);
         result[dml].tokenSymbol = tokenSymbol;
+
+        // Lấy tỷ giá từ cơ sở dữ liệu
+        const tokenPrice = await getRatePriceFromDatabase(tokenSymbol);
+        result[dml].tokenPrice = tokenPrice;
 
     }
 }
@@ -146,6 +155,22 @@ async function calculatePriceChange(result, transactions) {
         } else {
             result[dml].priceChange = 0;
         }
+    }
+}
+
+async function getTVL(dmlAddress) {
+    try {
+        const dmlContract = new web3.eth.Contract(abiDml, dmlAddress);
+        const tokenReserves = await dmlContract.methods.getReserves().call();
+        if (tokenReserves._reservetoken === 0) {
+            console.log("DML is no longer available!");
+            return 0;
+        }
+
+        return tokenReserves._reservetoken
+    } catch (error) {
+        console.error('Error retrieving TVL:', error);
+        return 0;
     }
 }
 

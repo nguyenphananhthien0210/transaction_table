@@ -7,7 +7,7 @@ const moment = require('moment');
 
 const express = require('express');
 const app = express();
-const port = 4000;
+const port = 3000;
 
 const { MongoClient } = require('mongodb');
 require('dotenv').config();
@@ -194,7 +194,7 @@ async function getTokenMetadata(tokenURI) {
 querySubgraph();
 
 
-app.get('/transaction', async (req, res) => {
+app.get('/transaction-list', async (req, res) => {
     try {
         await client.connect();
         const collection = client.db(process.env.DATABASE_NAME).collection(process.env.COLLECTION_NAME);
