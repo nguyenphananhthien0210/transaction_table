@@ -12,33 +12,41 @@ const DATABASE_HOMEPAGE = process.env.DATABASE_HOMEPAGE;
 const COLLECTION_HOMEPAGE = process.env.COLLECTION_HOMEPAGE;
 
 let pageSize = 10;
-let startIndex = 0;
+let currentPage = 1;
 let allRecords = [];
+let remainingRecords = [];
 
 app.get('/api/homepage', async (req, res) => {
     try {
-        const client = new MongoClient(URI);
-        await client.connect();
-        const db = client.db(DATABASE_HOMEPAGE);
-        const collection = db.collection(COLLECTION_HOMEPAGE);
+        const page = parseInt(req.query.page) || currentPage;
 
-        if (allRecords.length === 0) {
-            allRecords = await collection.find().toArray();
-            shuffleArray(allRecords);
+        if (page !== currentPage) {
+            currentPage = page;
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            remainingRecords = allRecords.slice(startIndex, endIndex);
         }
 
-        const records = allRecords.slice(startIndex, startIndex + pageSize);
-        startIndex += pageSize;
+        if (remainingRecords.length === 0) {
+            const client = new MongoClient(URI);
+            await client.connect();
+            const db = client.db(DATABASE_HOMEPAGE);
+            allRecords = await db.collection(COLLECTION_HOMEPAGE).find().toArray();
+            shuffleArray(allRecords);
+            await client.close();
+
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            remainingRecords = allRecords.slice(startIndex, endIndex);
+        }
 
         res.json({
-            records,
+            records: remainingRecords,
             totalPage: Math.ceil(allRecords.length / pageSize),
-            currentPage: Math.ceil(startIndex / pageSize),
+            currentPage,
             totalRecords: allRecords.length,
-            nextPage: startIndex < allRecords.length,
+            nextPage: (currentPage * pageSize) < allRecords.length,
         });
-
-        await client.close();
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -48,5 +56,3 @@ app.get('/api/homepage', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
-
-
