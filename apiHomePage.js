@@ -1,52 +1,127 @@
 
+// const express = require('express');
+// const { MongoClient } = require('mongodb');
+// require('dotenv').config();
+
+// const app = express();
+
+// const port = 3001;
+// const URI = process.env.CONNECTED_MONGODB_URI;
+// const DATABASE_HOMEPAGE = process.env.DATABASE_HOMEPAGE;
+// const COLLECTION_HOMEPAGE = process.env.COLLECTION_HOMEPAGE;
+
+// app.use((req, res, next) => {
+//     res.setHeader('Access-Control-Allow-Origin', '*');
+//     res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+//     next();
+// });
+
+// let existingRecords = [];
+
+// app.get('/api/homepage', async (req, res) => {
+//     try {
+//         const page = parseInt(req.query.page) || 1;
+//         const limit = 10;
+
+//         if (page === 1) {
+//             existingRecords = [];
+//         }
+
+//         const client = new MongoClient(URI);
+//         await client.connect();
+//         const db = client.db(DATABASE_HOMEPAGE);
+
+//         const collection = db.collection(COLLECTION_HOMEPAGE);
+
+//         const randomRecords = await collection.aggregate([
+//             { $match: { _id: { $nin: existingRecords } } },
+//             { $sample: { size: limit } }
+//         ]).toArray();
+
+//         const uniqueRecords = randomRecords.filter(record => !existingRecords.includes(record._id));
+
+//         existingRecords = existingRecords.concat(uniqueRecords.map(record => record._id));
+
+//         res.json(uniqueRecords);
+
+//         await client.close();
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ error: 'Internal Server Error' });
+//     }
+// });
+
+// app.listen(port, () => {
+//     console.log(`Server is running on port ${port}`);
+// });
+
+
 const express = require('express');
 const { MongoClient } = require('mongodb');
 require('dotenv').config();
-const shuffleArray = require('shuffle-array');
 
 const app = express();
 
-const port = process.env.PORT || 3000;
+const port = 3001;
 const URI = process.env.CONNECTED_MONGODB_URI;
 const DATABASE_HOMEPAGE = process.env.DATABASE_HOMEPAGE;
 const COLLECTION_HOMEPAGE = process.env.COLLECTION_HOMEPAGE;
 
-let pageSize = 10;
-let currentPage = 1;
-let allRecords = [];
-let remainingRecords = [];
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
+let existingRecords = [];
 
 app.get('/api/homepage', async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || currentPage;
+        const page = parseInt(req.query.page) || 1;
+        const limit = 10;
 
-        if (page !== currentPage) {
-            currentPage = page;
-            const startIndex = (currentPage - 1) * pageSize;
-            const endIndex = startIndex + pageSize;
-            remainingRecords = allRecords.slice(startIndex, endIndex);
+        if (page === 1) {
+            existingRecords = [];
         }
 
-        if (remainingRecords.length === 0) {
-            const client = new MongoClient(URI);
-            await client.connect();
-            const db = client.db(DATABASE_HOMEPAGE);
-            allRecords = await db.collection(COLLECTION_HOMEPAGE).find().toArray();
-            shuffleArray(allRecords);
-            await client.close();
+        const client = new MongoClient(URI);
+        await client.connect();
+        const db = client.db(DATABASE_HOMEPAGE);
 
-            const startIndex = (currentPage - 1) * pageSize;
-            const endIndex = startIndex + pageSize;
-            remainingRecords = allRecords.slice(startIndex, endIndex);
+        const collection = db.collection(COLLECTION_HOMEPAGE);
+
+        const totalRecords = await collection.countDocuments();
+        const totalPages = Math.ceil(totalRecords / limit);
+
+        let randomRecords = [];
+        let pageRecords = [];
+
+        if (existingRecords.length < totalRecords) {
+            const existingRecordIds = existingRecords.map(record => record.dmlAddress);
+
+            randomRecords = await collection.aggregate([
+                { $match: { dmlAddress: { $nin: existingRecordIds } } },
+                { $sample: { size: limit } }
+            ]).toArray();
+
+            existingRecords.push(...randomRecords);
         }
 
-        res.json({
-            records: remainingRecords,
-            totalPage: Math.ceil(allRecords.length / pageSize),
-            currentPage,
-            totalRecords: allRecords.length,
-            nextPage: (currentPage * pageSize) < allRecords.length,
-        });
+        pageRecords = existingRecords.slice((page - 1) * limit, page * limit);
+
+        const hasNextPage = page < totalPages;
+
+        const response = {
+            totalRecords,
+            currentPage: page,
+            totalPage: totalPages,
+            hasNextPage,
+            records: pageRecords
+        };
+
+        res.json(response);
+
+        await client.close();
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -56,3 +131,4 @@ app.get('/api/homepage', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
+

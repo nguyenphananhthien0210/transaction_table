@@ -14,6 +14,7 @@ const URI = process.env.CONNECTED_MONGODB_URI
 const DATABASE_HOMEPAGE = process.env.DATABASE_HOMEPAGE
 const COLLECTION_HOMEPAGE = process.env.COLLECTION_HOMEPAGE
 const COLLECTION_CURRENTBLOCK = process.env.COLLECTION_CURRENTBLOCK
+const COLLECTION_CREATOR = process.env.COLLECTION_CREATOR
 
 let isProcessing = false;
 
@@ -55,6 +56,7 @@ async function fetchData() {
                 blockNumber_lte: ${latestBlockNumber}
                 }
             ) {
+                Factory_Contract_id
                 blockNumber
                 dmlToken
                 erc
@@ -72,26 +74,41 @@ async function fetchData() {
         for (const transaction of dmlTokenCreateds) {
             const dmlAddress = transaction.dmlToken;
 
-            const dmlContract = new web3.eth.Contract(abiDml, dmlAddress);
-            const reserveLiquidity = await dmlContract.methods.getReserves().call();
+            const tokenId = transaction.Factory_Contract_id;
+            const nftAddress = transaction.nft;
 
-            if (reserveLiquidity._reservetoken !== 0 && reserveLiquidity._reservenft !== 0) {
+            const db = client.db('metadataList');
+            const creatorCollection = db.collection('creator');
 
-                const tokenId = await dmlContract.methods.id().call();
-                const nftAddress = await dmlContract.methods.nft().call();
+            const creator = await creatorCollection
+                .find({
+                    from: "0x0000000000000000000000000000000000000000",
+                    Creator_Contract_id: tokenId,
+                    //nftAddress: nftAddress
+                })
+                .toArray();
 
-                const metadata = await getMetadata(nftAddress, tokenId);
+            let to = null;
+            let blockTimestamp = null;
 
-                const poolLink = `https://mumbai.polygonscan.com/address/${dmlAddress}`
-
-                const data = {
-                    metadata,
-                    poolLink,
-                };
-                await collection.insertOne(data);
-
-                console.log(metadata, poolLink);
+            if (creator.length > 0) {
+                to = creator[0].to;
+                blockTimestamp = creator[0].blockTimestamp;
             }
+
+            const metadata = await getMetadata(nftAddress, tokenId);
+            const data = {
+                dmlAddress,
+                metadata,
+                creatorAddress: to,
+                blockTimestamp
+            };
+
+            await collection.insertOne(data);
+
+            console.log(data);
+
+
         }
 
         await currentBlockCollection.updateOne({}, { $set: { currentBlock: latestBlockNumber } });

@@ -6,6 +6,9 @@ require('dotenv').config();
 
 const web3 = new Web3(new Web3.providers.HttpProvider('https://rpc.ankr.com/polygon_mumbai'));
 
+const abiDml = require('./abiDml.json');
+const abiToken = require('./abiToken.json');
+
 const uri = process.env.CONNECTED_MONGODB_URI
 const DATA_DATABASE = process.env.DATABASE_TEST;
 const DML_COLLECTION = process.env.DML_COLLECTION;
@@ -77,6 +80,11 @@ async function getDml() {
             return;
         }
 
+        for (const dmlToken of dmlTokenCreateds) {
+            dmlToken.tokenId = await getTokenId(dmlToken);
+            dmlToken.tokenName = await getTokenName(dmlToken.erc)
+        }
+
         await dmlCollection.insertMany(dmlTokenCreateds);
 
         await currentBlockCollection.updateOne({}, { $set: { currentBlock: latestBlockNumber } });
@@ -87,6 +95,22 @@ async function getDml() {
     } finally {
         isProcessing = false;
     }
+}
+
+async function getTokenId(dmlToken) {
+    const contractDml = new web3.eth.Contract(abiDml, dmlToken.dmlToken);
+
+    const tokenId = await contractDml.methods.id().call();
+
+    return tokenId
+}
+
+async function getTokenName(erc) {
+    const contractToken = new web3.eth.Contract(abiToken, erc);
+
+    const tokenName = await contractToken.methods.name().call();
+
+    return tokenName
 }
 
 const job = new cron.CronJob('*/10 * * * * *', getDml);
